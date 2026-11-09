@@ -16,12 +16,27 @@ params = json.loads((job / "params.json").read_text(encoding="utf-8"))
 family = params.get("family") or [1]
 min_os = str(params.get("min_os") or "15.0")
 
-info = subprocess.check_output(["sips", "-g", "pixelWidth", "-g", "pixelHeight", "-g", "hasAlpha", str(source)], text=True)
-properties = dict(line.strip().split(": ", 1) for line in info.splitlines() if ": " in line)
+def sips_props(path):
+    info = subprocess.check_output(["sips", "-g", "pixelWidth", "-g", "pixelHeight", "-g", "hasAlpha", str(path)], text=True)
+    return dict(line.strip().split(": ", 1) for line in info.splitlines() if ": " in line)
+
+properties = sips_props(source)
 if properties.get("pixelWidth") != "1024" or properties.get("pixelHeight") != "1024":
     raise SystemExit("1024.png phải có kích thước 1024 x 1024 pixel.")
 if properties.get("hasAlpha") != "no":
-    raise SystemExit("1024.png có alpha hoặc không xác định được alpha. Xuất PNG nền kín không alpha rồi chạy lại.")
+    # Apple không nhận icon có alpha -> tự đặt icon lên nền trắng và bỏ kênh alpha
+    print("1024.png có alpha: tự xoá alpha (nền trắng)...", flush=True)
+    subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--break-system-packages", "pillow"], check=False)
+    from PIL import Image
+    img = Image.open(source).convert("RGBA")
+    flat = Image.new("RGB", img.size, (255, 255, 255))
+    flat.paste(img, mask=img.split()[3])
+    fixed = job / "1024_noalpha.png"
+    flat.save(fixed, "PNG")
+    source = fixed
+    if sips_props(source).get("hasAlpha") != "no":
+        raise SystemExit("Không xoá được alpha của 1024.png.")
+    print("Đã xoá alpha.", flush=True)
 
 stage = Path(tempfile.mkdtemp(prefix="appicons-"))
 catalog = stage / "Assets.xcassets"
