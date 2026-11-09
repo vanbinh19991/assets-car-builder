@@ -1,0 +1,36 @@
+# Workflow chạy trên máy Mac của GitHub để tạo Assets.car bằng actool thật (Xcode).
+# Đặt file này vào repo tại: .github/workflows/build-assets.yml
+# Web upload-testflight sẽ: đẩy 1024.png vào jobs/<id>/, gọi workflow, chờ, rồi tải artifact "assets-<id>".
+name: build-assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Mã công việc (thư mục jobs/<job_id>/ chứa 1024.png và params.json)"
+        required: true
+
+run-name: build-assets ${{ inputs.job_id }}
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Chọn Xcode mới nhất
+        run: |
+          XC=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+          xcrun actool --version
+
+      - name: Tạo Assets.car (giống 2new2.sh)
+        run: python3 .github/scripts/build_icons.py "jobs/${{ inputs.job_id }}" out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-${{ inputs.job_id }}
+          path: out/
+          retention-days: 1
