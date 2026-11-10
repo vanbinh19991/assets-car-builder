@@ -1,0 +1,63 @@
+# Build project Xcode (.zip) ra .ipa trên máy Mac của GitHub.
+# Đặt file này vào repo tại: .github/workflows/build-xcode.yml
+# Mã nguồn và .ipa đi qua 1 bản "draft release" (chỉ chủ repo thấy), không đưa vào repo hay artifact công khai.
+name: build-xcode
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Mã công việc"
+        required: true
+      release_id:
+        description: "ID draft release chứa src.zip"
+        required: true
+      asset_id:
+        description: "ID file src.zip"
+        required: true
+
+run-name: build-xcode ${{ inputs.job_id }}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      RELEASE_ID: ${{ inputs.release_id }}
+      ASSET_ID: ${{ inputs.asset_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Chọn Xcode mới nhất
+        run: |
+          XC=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+
+      - name: Tải mã nguồn
+        run: |
+          curl -sSfL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" \
+            "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID" -o "$RUNNER_TEMP/src.zip"
+
+      - name: Build ra .ipa
+        run: bash .github/scripts/build_xcode.sh "$RUNNER_TEMP/src.zip" "$RUNNER_TEMP/out"
+
+      - name: Gửi .ipa về
+        run: |
+          curl -sSf -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/octet-stream" \
+            --data-binary @"$RUNNER_TEMP/out/app.ipa" \
+            "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=app.ipa" > /dev/null
+
+      - name: Gửi log lỗi
+        if: failure()
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          (grep -E "error:|LỖI|== " "$RUNNER_TEMP/out/build.log" | tail -n 40; echo "-----"; tail -n 60 "$RUNNER_TEMP/out/build.log") > "$RUNNER_TEMP/out/error.txt" 2>/dev/null || echo "Không có log" > "$RUNNER_TEMP/out/error.txt"
+          curl -sS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: text/plain" \
+            --data-binary @"$RUNNER_TEMP/out/error.txt" \
+            "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=error.txt" > /dev/null
