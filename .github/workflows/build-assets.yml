@@ -14,7 +14,7 @@ run-name: build-assets ${{ inputs.job_id }}
 
 jobs:
   build:
-    runs-on: macos-latest
+        runs-on: ${{ inputs.runner || 'macos-latest' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
