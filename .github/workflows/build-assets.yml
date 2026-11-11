@@ -9,12 +9,16 @@ on:
       job_id:
         description: "Mã công việc (thư mục jobs/<job_id>/ chứa 1024.png và params.json)"
         required: true
+      runner:
+        description: "Loại máy Mac (web tự đổi khi GitHub thiếu máy: macos-latest / macos-15-intel / macos-14)"
+        required: false
+        default: macos-latest
 
 run-name: build-assets ${{ inputs.job_id }}
 
 jobs:
   build:
-        runs-on: ${{ inputs.runner || 'macos-latest' }}
+    runs-on: ${{ inputs.runner || 'macos-latest' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
