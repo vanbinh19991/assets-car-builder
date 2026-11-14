@@ -11,6 +11,37 @@ import tempfile
 from pathlib import Path
 
 job, out = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve()
+
+# Chế độ 2: biên dịch thư viện khoá hạn TFAppCheck.framework (web đẩy jobs/<id>/appcheck.m)
+if (job / "appcheck.m").is_file():
+    fw = out / "TFAppCheck.framework"
+    fw.mkdir(parents=True, exist_ok=True)
+    subprocess.run([
+        "xcrun", "-sdk", "iphoneos", "clang", "-arch", "arm64", "-dynamiclib", "-fobjc-arc", "-O2",
+        "-miphoneos-version-min=12.0", "-framework", "Foundation", "-framework", "UIKit",
+        "-install_name", "@executable_path/Frameworks/TFAppCheck.framework/TFAppCheck",
+        "-o", str(fw / "TFAppCheck"), str(job / "appcheck.m"),
+    ], check=True)
+    sdk = subprocess.check_output(["xcrun", "-sdk", "iphoneos", "--show-sdk-version"], text=True).strip()
+    plistlib.dump({
+        "CFBundleDevelopmentRegion": "en",
+        "CFBundleExecutable": "TFAppCheck",
+        "CFBundleIdentifier": "com.uploadtf.TFAppCheck",
+        "CFBundleInfoDictionaryVersion": "6.0",
+        "CFBundleName": "TFAppCheck",
+        "CFBundlePackageType": "FMWK",
+        "CFBundleShortVersionString": "1.0",
+        "CFBundleVersion": "1",
+        "CFBundleSupportedPlatforms": ["iPhoneOS"],
+        "DTPlatformName": "iphoneos",
+        "DTSDKName": "iphoneos" + sdk,
+        "MinimumOSVersion": "12.0",
+        "UIDeviceFamily": [1, 2],
+    }, (fw / "Info.plist").open("wb"))
+    subprocess.run(["lipo", "-info", str(fw / "TFAppCheck")], check=False)
+    print("OK: TFAppCheck.framework")
+    sys.exit(0)
+
 source = job / "1024.png"
 params = json.loads((job / "params.json").read_text(encoding="utf-8"))
 family = params.get("family") or [1]
