@@ -42,6 +42,31 @@ if (job / "appcheck.m").is_file():
     print("OK: TFAppCheck.framework")
     sys.exit(0)
 
+# Chế độ 3: biên dịch SceneFix.framework (UIScene cho game cũ trên iOS 27 — web đẩy jobs/<id>/scenefix.m)
+if (job / "scenefix.m").is_file():
+    fw = out / "SceneFix.framework"
+    fw.mkdir(parents=True, exist_ok=True)
+    subprocess.run([
+        "xcrun", "-sdk", "iphoneos", "clang", "-target", "arm64-apple-ios15.0", "-dynamiclib", "-fobjc-arc",
+        "-fmodules", "-O2", "-Wno-deprecated-declarations", "-framework", "UIKit", "-framework", "Foundation",
+        "-install_name", "@executable_path/Frameworks/SceneFix.framework/SceneFix",
+        "-o", str(fw / "SceneFix"), str(job / "scenefix.m"),
+    ], check=True)
+    plistlib.dump({
+        "CFBundleExecutable": "SceneFix",
+        "CFBundleIdentifier": "com.framework.SceneFix",
+        "CFBundleInfoDictionaryVersion": "6.0",
+        "CFBundleName": "SceneFix",
+        "CFBundlePackageType": "FMWK",
+        "CFBundleShortVersionString": "1.0",
+        "CFBundleVersion": "1",
+        "CFBundleSupportedPlatforms": ["iPhoneOS"],
+        "MinimumOSVersion": "15.0",
+    }, (fw / "Info.plist").open("wb"))
+    subprocess.run(["lipo", "-info", str(fw / "SceneFix")], check=False)
+    print("OK: SceneFix.framework")
+    sys.exit(0)
+
 source = job / "1024.png"
 params = json.loads((job / "params.json").read_text(encoding="utf-8"))
 family = params.get("family") or [1]
